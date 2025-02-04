@@ -1,15 +1,14 @@
 #!/usr/bin/python
-from __future__ import print_function
 import sys
 import os
-sys.path.insert(0, './Scripts/')
+sys.path.insert(0, 'UI/Scripts/')
 import re
 import subprocess
 import shutil
 import math
-import parseENSDF as ensdf
-import getNaturalIsotopes as gni
-import getAbundance as isoabund
+from .Scripts import parseENSDF as ensdf
+from .Scripts import getNaturalIsotopes as gni
+from .Scripts import getAbundance as isoabund
 
 class constants:
     N_A = 6.0221409e+23
@@ -22,6 +21,7 @@ class constants:
     run_talys  = False
     run_alphas = True
     print_alphas = False
+    calculate_energy_loss = False
     download_data = False
     download_version = 2
     force_recalculation = False
@@ -32,9 +32,18 @@ class material:
         self.ele = str(e)
         self.A = float(a)
         self.frac = float(f)
+        self.num_density = constants.N_A*float(f)*1/float(a)
+    
+    def __str__(self):
+        # This method defines the string representation of the object.
+        return f"(name={self.ele}, A={self.A}, f={self.frac})"
+    
+    def __repr__(self):
+        # This method is used for debugging and developer-focused representation.
+        return f"({self.ele!r}, {self.A!r}, {self.frac!r})"
 
 def isoDir(ele,A):
-    return './Data/Isotopes/'+ele.capitalize()+'/'+ele.capitalize()+str(int(A))+'/'
+    return 'UI/Data/Isotopes/'+ele.capitalize()+'/'+ele.capitalize()+str(int(A))+'/'
 
 def parseIsotope(iso):
     ele = ''
@@ -47,7 +56,7 @@ def parseIsotope(iso):
     return [ele,A]
 
 def generateAlphaFileName(ele,A):
-    outdir = './AlphaLists/'
+    outdir = 'UI/AlphaLists/'
     fName = outdir + ele.capitalize() + str(A) + 'Alphas.dat'
     return fName
 
@@ -57,7 +66,7 @@ def generateAlphaList(ele, A):
 
 def loadAlphaList(fname):
     f = open(fname)
-    tokens = map(lambda line: line.split(), f.readlines())
+    tokens = [line.split() for line in f.readlines()]
     alpha_list = []
     for words in tokens:
         if words[0][0] == '#' or len(words) < 2:
@@ -88,10 +97,10 @@ def getAlphaListIfExists(ele,A):
 
 def loadChainAlphaList(fname):
     f = open(fname)
-    tokens = map(lambda line: line.split(), f.readlines())
+    tokens = [line.split() for line in f.readlines()]
     alpha_list = []
     for line in tokens:
-        if len(list(line)) < 2 or line[0][0] == '#':
+        if len(line) < 2 or line[0][0] == '#':
             continue
         # Read isotope and its branching ratio from file
         iso = line[0]
@@ -104,15 +113,16 @@ def loadChainAlphaList(fname):
             print(iso, file = constants.ofile)
             print('\t', aList_forIso, file = constants.ofile)
         for [ene,intensity] in aList_forIso:
-            alpha_list.append([ene, intensity*br/100])
+            alpha_list.append([ene, intensity*br/100]) #why multiply the branching ratio by intensity?
     return alpha_list
+
 
 def readTargetMaterial(fname):
     f = open(fname)
     mat_comp = []
-    tokens = map(lambda line: line.split(), f.readlines())
+    tokens = [line.split() for line in f.readlines()]
     for line in tokens:
-        if len(list(line)) < 3:
+        if len(line) < 3:
             continue
         if line[0][0] == '#':
             continue
@@ -134,7 +144,7 @@ def readTargetMaterial(fname):
     norm = 0
     for mat in mat_comp:
         norm += mat.frac
-    for mat in mat_comp:
+    for mat in mat_comp: #can condense into a single loop
         mat.frac /= norm
 
     return mat_comp
@@ -153,11 +163,11 @@ def calcStoppingPower(e_alpha_MeV,mat_comp):
     
     # Then, for each element, get the stopping power at this alpha energy
     for mat in mat_comp_reduced:
-        spDir = './Data/StoppingPowers/'
+        spDir = 'UI/Data/StoppingPowers/'
         spFile = spDir + mat.lower() + '.dat'
         spf = open(spFile)
         
-        tokens = map(lambda line: line.split(), spf.readlines())
+        tokens = [line.split() for line in spf.readlines()]
         first = True
         sp_found = False
         e_curr = 0
@@ -283,9 +293,9 @@ def getIsotopeDifferentialNSpec(e_a, ele, A):
 
     f = open(fname)
     spec = {}
-    tokens = map(lambda line: line.split(), f.readlines())
+    tokens = [line.split() for line in f.readlines()]
     for line in tokens:
-        if len(list(line)) < 1 or line[0] == 'EMPTY':
+        if len(line) < 1 or line[0] == 'EMPTY':
             break
         if line[0][0] == '#':
             continue
@@ -365,7 +375,7 @@ def readTotalNXsect(e_a,ele,A):
         print("Could not find file ", fname, file = constants.ofile)
         return 0
     f = open(fname)
-    lines = list(map(lambda line: line.split(), f.readlines()))
+    lines = [line.split() for line in f.readlines()]
     xsect_line  = 0
     for line in lines:
         if line == ['2.','Binary','non-elastic','cross','sections','(non-exclusive)']:
@@ -374,23 +384,22 @@ def readTotalNXsect(e_a,ele,A):
             xsect_line += 1
     
     xsect_line += 3
-    #print("Lines: ", len(list(lines)), " xsect_line = ", xsect_line)
-
-    if len(list(lines))==0 or  len(list(lines)) < xsect_line:
+    if len(lines) < xsect_line:
         return 0
-    if list(lines)[xsect_line][0] != 'neutron':
+    if lines[xsect_line][0] != 'neutron':
         return 0
     sigma = float(lines[xsect_line][2])
     sigma *= constants.mb_to_cm2
-    #print("sigma = " , sigma)
     return sigma
 
 def condense_alpha_list(alpha_list,alpha_step_size):
     alpha_ene_cdf = []
     max_alpha = max(alpha_list)
-    e_a_max = int(max_alpha[0]*100 + 0.5)/100.
+    e_a_max = int(max_alpha[0]*100 + 0.5)/100
+    print(e_a_max)
     alpha_ene_cdf.append([e_a_max,max_alpha[1]])
     e_a = e_a_max
+    print(alpha_list)
     while e_a > 0:
         cum_int = 0
         for alpha in alpha_list:
@@ -401,9 +410,127 @@ def condense_alpha_list(alpha_list,alpha_step_size):
         e_a -= alpha_step_size
     return alpha_ene_cdf
 
+def calculate_num_steps(alpha_list,alpha_step_size):
+    total_steps = 0
+    for alpha in alpha_list:
+        this_e_a = int(alpha[0]*100 + .05)/100
+        total_steps += int((this_e_a/alpha_step_size)*100)/100
+    return total_steps
+
+def n_prob_spec(nspec, total):
+    prob_spec = {}
+    for e in nspec:
+        probability = (nspec[e]/total) * 100 * 100
+        prob_spec[e] = probability
+    return prob_spec
+
+def run_alpha_energy_loss(alpha_list, mat_comp, e_alpha_step):
+    binsize = 0.1 # Bin size for output spectrum
+    spec_tot = {}
+    xsects = {}
+    total_xsect = 0
+    counter = 0
+    total_steps = (calculate_num_steps(alpha_list, e_alpha_step)*100+.5)/100
+    nprob_spectrum = {}
+    a_n_spec = {}
+    a_n_probspec = {}
+    #iterate through each alpha in the alpha list
+    
+    for [e_a, intensity] in alpha_list:
+        this_e_a = int(e_a*100+.5)/100
+
+        #iterate through entire alpha's energy
+        #delta_e_a = 0
+        while this_e_a > 0:
+            counter += 1
+
+            #loading bar
+            if counter % (int(total_steps/100)) == 0:
+                sys.stdout.write('\r')
+                sys.stdout.write("[%-100s] %d%%" % ('='*int(counter*100/total_steps), 100*counter/total_steps))
+                sys.stdout.flush()
+
+            #calculate stopping power for this alpha energy
+            stopping_power = calcStoppingPower(this_e_a, mat_comp)
+            
+            #iterate through each material for each change in energy
+            for mat in mat_comp:
+                #calculate total cross section at this energy
+                mat_term = getMatTerm(mat,mat_comp)
+                prefactors = (intensity/100.)*mat_term*e_alpha_step/stopping_power
+                xsect = prefactors*readTotalNXsect(this_e_a, mat.ele,mat.A)
+                total_xsect += xsect
+
+                #calculate neutron spectrum at this energy
+                spec_raw = getIsotopeDifferentialNSpec(this_e_a, mat.ele, mat.A)
+                spec = rebin(spec_raw, constants.delta_bin, constants.min_bin, constants.max_bin)
+                matname = str(mat.ele)+str(mat.A)
+
+                #calculate spectrum for each material
+                if matname in xsects:
+                    xsects[matname] += xsect
+                else:
+                    xsects[matname] = xsect
+
+                #calculate neutron yield for each each neutron energy
+                delta_e_a = round(e_a - this_e_a, 2)
+                for e in spec:
+                    val = prefactors * spec[e]
+                    if e in spec_tot:
+                        spec_tot[e] += val
+                        if (e,delta_e_a) in a_n_spec:
+                            a_n_spec[e,delta_e_a] += val
+                        else:
+                            a_n_spec[e,delta_e_a] = val
+                    else:
+                        spec_tot[e] = val
+                        a_n_spec[e,delta_e_a] = val
+
+                    #if delta_e_a in a_n_spec and e in a_n_spec:
+                        
+                    #else:
+                        
+
+            #energy step
+            this_e_a -= e_alpha_step
+            #delta_e_a += e_alpha_step
+
+    nspec_sum = integrate(spec_tot)
+    for e in spec_tot:
+        nprob_spectrum[e] = spec_tot[e]/nspec_sum
+
+    
+    a_n_100 = {}
+    #calculate probabilities across entire (a,n) spectrum
+    for e, delta_e_a in a_n_spec:
+        if spec_tot[e] == 0:
+            continue
+        else:
+            a_n_probspec[e,delta_e_a] = a_n_spec[e,delta_e_a]/spec_tot[e]
+            a_n_graph = {}
+            if e == 7000:
+                a_n_100[delta_e_a] = a_n_probspec[e,delta_e_a]
+    
+    #make discrete lists for graphs
+    a_n_list = {}
+    for e in spec_tot:
+        a_n_graph = {}
+        for en, delta_e_a in a_n_spec:
+            if e == en and e < 12600:
+                a_n_graph[delta_e_a] = a_n_probspec[e,delta_e_a]
+        a_n_list[e] = a_n_graph
+    
+    max_alpha = round(max(alpha_list)[0], 2)
+    max_alpha_list = []
+    while max_alpha >= 0:
+        max_alpha_list.append(max_alpha)
+        max_alpha = round(max_alpha - e_alpha_step, 2)
+
+    print("TEST2: ", a_n_list.__len__())
+    return xsects, spec_tot, nprob_spectrum, a_n_probspec, max_alpha_list, a_n_list
+
 def run_alpha(alpha_list, mat_comp, e_alpha_step):
     binsize = 0.1 # Bin size for output spectrum
-
     spec_tot = {}
     xsects = {}
     total_xsect = 0
@@ -450,12 +577,15 @@ def run_alpha(alpha_list, mat_comp, e_alpha_step):
     # print out total spectrum
     newspec = spec_tot
     print('',file = constants.ofile)
-    print('# Total neutron yield = ', total_xsect, ' n/decay', file = constants.ofile)
+    print('# Total neutron yield = ', '{0:.2e}'.format(total_xsect), ' n/decay', file = constants.ofile)
     for x in sorted(xsects):
-        print('\t',x,xsects[x], file = constants.ofile)
-    print('# Integral of spectrum = ', integrate(newspec), " n/decay", file = constants.ofile)
+        print('\t',x,'{0:.2e}'.format(xsects[x]), file = constants.ofile)
+    print('# Integral of spectrum = ', '{0:.2e}'.format(integrate(newspec)), " n/decay", file = constants.ofile)
     for e in sorted(newspec):
-        print(e, newspec[e], file = constants.ofile)
+        print(e, '{0:.2e}'.format(newspec[e]), file = constants.ofile) #will always be 0 after a certain point?
+    return xsects,newspec
+
+
 
 def help_message():
     print('Usage: You must specify an alpha list or decay chain file and a target material file.\nYou may also specify a step size to for integrating the alphas as they slow down in MeV; the default value is 0.01 MeV\n\t-l [alpha list file name]\n\t-c [decay chain file name]\n\t-m [material composition file name]\n\t-s [alpha step size in MeV]\n\t-t (to run TALYS for reactions not in libraries)\n\t-d (download isotopic data for isotopes missing from database; default behavior is v2)\n\t\t-d v1 (use V1 database, TALYS-1.6)\n\t-d v2 (use V2 database, TALYS-1.95)\n\t-o [output file name]', file = sys.stdout)
@@ -488,13 +618,15 @@ def main():
             constants.run_talys = True
         if arg == '-d':
             constants.download_data = True
-            print("Option set: Download data")
             constants.download_version = 2
-            version_choice = sys.argv[sys.argv.index(arg)+1]
-            if (not version_choice[0] == '-') and (version_choice[0].lower() == 'v'):
-                version_num = int(version_choice[1])
-                constants.download_version = version_num
-                print('Downloading data from version',version_num)
+            if len(sys.argv) > sys.argv.index(arg)+1:
+                version_choice = sys.argv[sys.argv.index(arg)+1]
+                if (not version_choice[0] == '-') and (version_choice[0].lower() == 'v'):
+                    version_num = int(version_choice[1])
+                    constants.download_version = version_num
+                    print('Downloading data from version',version_num)
+        if arg == '-Ea':
+            constants.calculate_energy_loss = True
         if arg == '--print-alphas':
             constants.print_alphas = True
         if arg == '--print-alphas-only':
@@ -519,26 +651,30 @@ def main():
     if constants.print_alphas:
         print('Alpha List: ', file = sys.stdout)
         print(max(alpha_list), file = sys.stdout)
-        condense_alpha_list(alpha_list,alpha_step_size)
+        condense_alpha_list(alpha_list,alpha_step_size) #why call this function?
         for alph in alpha_list:
             print(alph[0],'&', alph[1],'\\\\', file = sys.stdout)
 
     if constants.download_data:
         for mat in mat_comp:
             ele = mat.ele
-            if not os.path.exists('./Data/Isotopes/'+ele.capitalize()):
+            if not os.path.exists('UI/Data/Isotopes/'+ele.capitalize()):
                 if constants.download_version == 2:
                     print('\tDownloading (datset V2) data for',ele, file = sys.stdout)
-                    bashcmd = './Scripts/download_element.sh ' + ele
+                    bashcmd = 'UI/Scripts/download_element.sh ' + ele
                     process = subprocess.call(bashcmd,shell=True)
                 elif constants.download_version == 1:
                     print('\tDownloading (dataset V1) data for',ele, file = sys.stdout)
-                    bashcmd = './Scripts/download_element_v1.sh ' + ele
+                    bashcmd = 'UI/Scripts/download_element_v1.sh ' + ele
                     process = subprocess.call(bashcmd,shell=True)
 
     if constants.run_alphas:
-        print('Running alphas:', file = sys.stdout)
-        run_alpha(alpha_list, mat_comp, alpha_step_size)
+        if constants.calculate_energy_loss:
+            print('Running alphas w/ energy loss:', file = sys.stdout)
+            run_alpha_energy_loss(alpha_list, mat_comp, alpha_step_size)
+        else:
+            print('Running alphas:', file = sys.stdout)
+            run_alpha(alpha_list, mat_comp, alpha_step_size)
 
 if __name__ == '__main__':
     main()
