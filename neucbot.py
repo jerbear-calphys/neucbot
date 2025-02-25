@@ -1,4 +1,5 @@
 #!/usr/bin/python
+
 import sys
 import os
 sys.path.insert(0, 'UI/Scripts/')
@@ -424,6 +425,19 @@ def n_prob_spec(nspec, total):
         prob_spec[e] = probability
     return prob_spec
 
+def download_talys_data(mat_comp):
+    for mat in mat_comp:
+        ele = mat.ele
+        if not os.path.exists('UI/Data/Isotopes/'+ele.capitalize()):
+            if constants.download_version == 2:
+                print('\tDownloading (datset V2) data for',ele, file = sys.stdout)
+                bashcmd = './UI/Scripts/download_element.sh ' + ele
+                process = subprocess.call(bashcmd,shell=True)
+            elif constants.download_version == 1:
+                print('\tDownloading (dataset V1) data for',ele, file = sys.stdout)
+                bashcmd = './UI/Scripts/download_element_v1.sh ' + ele
+                process = subprocess.call(bashcmd,shell=True)
+
 def run_alpha_energy_loss(alpha_list, mat_comp, e_alpha_step):
     binsize = 0.1 # Bin size for output spectrum
     spec_tot = {}
@@ -434,6 +448,8 @@ def run_alpha_energy_loss(alpha_list, mat_comp, e_alpha_step):
     nprob_spectrum = {}
     a_n_spec = {}
     a_n_probspec = {}
+    a_n_probspec_norm = {}
+    a_n_mat_probspec = {}
     #iterate through each alpha in the alpha list
     
     for [e_a, intensity] in alpha_list:
@@ -486,48 +502,56 @@ def run_alpha_energy_loss(alpha_list, mat_comp, e_alpha_step):
                         spec_tot[e] = val
                         a_n_spec[e,delta_e_a] = val
 
-                    #if delta_e_a in a_n_spec and e in a_n_spec:
-                        
-                    #else:
                         
 
             #energy step
             this_e_a -= e_alpha_step
-            #delta_e_a += e_alpha_step
 
     nspec_sum = integrate(spec_tot)
     for e in spec_tot:
         nprob_spectrum[e] = spec_tot[e]/nspec_sum
 
-    
-    a_n_100 = {}
     #calculate probabilities across entire (a,n) spectrum
     for e, delta_e_a in a_n_spec:
         if spec_tot[e] == 0:
             continue
         else:
             a_n_probspec[e,delta_e_a] = a_n_spec[e,delta_e_a]/spec_tot[e]
-            a_n_graph = {}
-            if e == 7000:
-                a_n_100[delta_e_a] = a_n_probspec[e,delta_e_a]
+            a_n_probspec_norm[e,delta_e_a] = a_n_spec[e,delta_e_a]/nspec_sum
     
-    #make discrete lists for graphs
+    #make discrete lists for (a,n) graphs for each neutron energy level
     a_n_list = {}
     for e in spec_tot:
         a_n_graph = {}
         for en, delta_e_a in a_n_spec:
-            if e == en and e < 12600:
-                a_n_graph[delta_e_a] = a_n_probspec[e,delta_e_a]
+            if e == en and spec_tot[e] != 0:
+                a_n_graph[delta_e_a] = a_n_probspec[e,delta_e_a]/constants.delta_bin
         a_n_list[e] = a_n_graph
     
+    #calculate probabilities for each element
+    for e, delta_e_a in a_n_spec:
+        if spec_tot[e] == 0:
+            continue
+        else:
+            a_n_mat_probspec[e,delta_e_a] = a_n_spec[e,delta_e_a]/spec_tot[e]
+
+    #make discrete lists for (a,n) spectrum split into constituent elements
+    a_n_mat_list = {}
+    for e in spec_tot:
+        a_n_mat_graph = {}
+        for en, delta_e_a in a_n_spec:
+            if e == en and spec_tot[e] != 0:
+                a_n_mat_graph[delta_e_a] = a_n_mat_probspec[e,delta_e_a]
+        a_n_mat_list[e,mat] = a_n_mat_graph
+
+    #make a simple list of each alpha energy increment for later iteration in flask app
     max_alpha = round(max(alpha_list)[0], 2)
     max_alpha_list = []
     while max_alpha >= 0:
         max_alpha_list.append(max_alpha)
         max_alpha = round(max_alpha - e_alpha_step, 2)
-
-    print("TEST2: ", a_n_list.__len__())
-    return xsects, spec_tot, nprob_spectrum, a_n_probspec, max_alpha_list, a_n_list
+        
+    return xsects, spec_tot, nprob_spectrum, a_n_probspec, max_alpha_list, a_n_list, a_n_probspec_norm
 
 def run_alpha(alpha_list, mat_comp, e_alpha_step):
     binsize = 0.1 # Bin size for output spectrum
@@ -661,11 +685,11 @@ def main():
             if not os.path.exists('UI/Data/Isotopes/'+ele.capitalize()):
                 if constants.download_version == 2:
                     print('\tDownloading (datset V2) data for',ele, file = sys.stdout)
-                    bashcmd = 'UI/Scripts/download_element.sh ' + ele
+                    bashcmd = './UI/Scripts/download_element.sh ' + ele
                     process = subprocess.call(bashcmd,shell=True)
                 elif constants.download_version == 1:
                     print('\tDownloading (dataset V1) data for',ele, file = sys.stdout)
-                    bashcmd = 'UI/Scripts/download_element_v1.sh ' + ele
+                    bashcmd = './UI/Scripts/download_element_v1.sh ' + ele
                     process = subprocess.call(bashcmd,shell=True)
 
     if constants.run_alphas:
