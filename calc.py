@@ -65,33 +65,32 @@ def calc():
                 nx.set_title(title)
                 nx.set_xlabel("ΔEα")
                 nx.set_ylabel("Probability/keV")
+                #plt.figure(figsize=(8,6))
 
                 tuf[e] = io.BytesIO()
                 plt.savefig(tuf[e], format="png")
                 tuf[e].seek(0)
-                #a_n_graph = base64.b64encode(tuf[e].getvalue()).decode()
                 graph_list[e] = base64.b64encode(tuf[e].getvalue()).decode()
 
-            fig, tx = plt.subplots() #nrows=2, ncols=2, figsize=(8,8)
+            fig, tx = plt.subplots()
 
             max_prob = max(aspec_norm.values())
             viridis_colors = [cm.viridis(i / (10000-1)) for i in range(10000)]
 
-            xbins = np.unique(sorted({key[0] for key in aspec_norm.keys()}))  # Unique x-values
-            ybins = np.unique(sorted({key[1] for key in aspec_norm.keys()}))  # Unique y-values
+            xbins = np.unique(sorted({key[0] for key in aspec_norm.keys()}))
+            ybins = np.unique(sorted({key[1] for key in aspec_norm.keys()}))
 
             histogram_data = np.zeros((len(ybins), len(xbins)))
 
             for i, x in enumerate(xbins):
                 for j, y in enumerate(ybins):
-                    histogram_data[j, i] = aspec_norm.get((x, y), 0)  # Get value, default to 0
+                    histogram_data[j, i] = aspec_norm.get((x, y), 0)
 
             # Plot using `pcolormesh`
-            plt.figure(figsize=(8, 6))
-            hx = plt.pcolormesh(xbins, ybins, histogram_data, shading='nearest', cmap='inferno')
+            plt.figure(figsize=(8,6))
+            hx = plt.pcolormesh(xbins, ybins, histogram_data, shading='nearest', cmap='rainbow')
             
             cbar = plt.colorbar(hx)
-            #cbar.set_ticks([0,max_prob])
 
             plt.title("2d histogram")
             plt.xlabel("Neutron Energy(keV)")
