@@ -12,7 +12,7 @@ from flask import ( # type: ignore
     Blueprint, flash, g, redirect, render_template, request, session, url_for
 )
 
-from UI.db import get_db # type: ignore
+#from UI.db import get_db # type: ignore
 
 bp = Blueprint('calc', __name__, url_prefix='/')
 
@@ -20,7 +20,17 @@ bp = Blueprint('calc', __name__, url_prefix='/')
 def calc():
     if request.method == 'POST':
         alphas = request.form.get('alpha_chain')
+        if alphas == "":
+            alphafile = request.files['alphafile']
+            alphas = neucbot.loadChainAlphaList(alphafile)
+        else:
+            alphas = neucbot.loadChainAlphaList(alphas)
         mat = request.form.get('material')
+        if mat == "":
+            matfile = request.files['matfile']
+            mat = neucbot.readTargetMaterial(matfile)
+        else:
+            mat = neucbot.readTargetMaterial(mat)
         slow_calc = request.form.get('a_energy_calculation')
 
         if not alphas:
@@ -30,14 +40,14 @@ def calc():
         #Process the 
         #neucbot.constants.run_talys = True
         neucbot.constants.download_data = True
-        alpha_list = neucbot.loadChainAlphaList(alphas)
+        #alpha_list = neucbot.loadChainAlphaList(alphas)
         #alpha_list = neucbot.loadAlphaList(alphas)
-        mat_comp = neucbot.readTargetMaterial(mat)
+        #mat_comp = neucbot.readTargetMaterial(mat)
 
-        neucbot.download_talys_data(mat_comp)
+        neucbot.download_talys_data(mat)
 
         if(slow_calc == "True"):
-            xsects, nspec, pspec, aspec, max_alpha, a_n_list, aspec_norm = neucbot.run_alpha_energy_loss(alpha_list, mat_comp, .01)
+            xsects, nspec, pspec, aspec, max_alpha, a_n_list, aspec_norm = neucbot.run_alpha_energy_loss(alphas, mat, .01)
 
             blue = Color("blue")
             colors = list(blue.range_to(Color("Yellow"),100))
@@ -75,7 +85,7 @@ def calc():
             fig, tx = plt.subplots()
 
             max_prob = max(aspec_norm.values())
-            viridis_colors = [cm.viridis(i / (10000-1)) for i in range(10000)]
+            viridis_colors = [cm.viridis(i / (10_000-1)) for i in range(10_000)]
 
             xbins = np.unique(sorted({key[0] for key in aspec_norm.keys()}))
             ybins = np.unique(sorted({key[1] for key in aspec_norm.keys()}))
@@ -88,7 +98,7 @@ def calc():
 
             # Plot using `pcolormesh`
             plt.figure(figsize=(8,6))
-            hx = plt.pcolormesh(xbins, ybins, histogram_data, shading='nearest', cmap='rainbow')
+            hx = plt.pcolormesh(xbins, ybins, histogram_data, shading='nearest', cmap='inferno')
             
             cbar = plt.colorbar(hx)
 
