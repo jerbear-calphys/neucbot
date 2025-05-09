@@ -19,12 +19,17 @@ bp = Blueprint('calc', __name__, url_prefix='/')
 @bp.route('/', methods=('GET', 'POST'))
 def calc():
     if request.method == 'POST':
+
+
         alphas = request.form.get('alpha_chain')
         if alphas == "":
             alphafile = request.files['alphafile']
+            print(alphafile)
             alphas = neucbot.loadChainAlphaList(alphafile)
         else:
             alphas = neucbot.loadChainAlphaList(alphas)
+
+        #####################################################
         mat = request.form.get('material')
         if mat == "":
             matfile = request.files['matfile']
@@ -32,27 +37,23 @@ def calc():
         else:
             mat = neucbot.readTargetMaterial(mat)
         slow_calc = request.form.get('a_energy_calculation')
-
+        #####################################################
         if not alphas:
             flash('Input text is required')
             return redirect(url_for('calc.calc'))
         
-        #Process the 
-        #neucbot.constants.run_talys = True
         neucbot.constants.download_data = True
-        #alpha_list = neucbot.loadChainAlphaList(alphas)
-        #alpha_list = neucbot.loadAlphaList(alphas)
-        #mat_comp = neucbot.readTargetMaterial(mat)
 
         neucbot.download_talys_data(mat)
 
         if(slow_calc == "True"):
             xsects, nspec, pspec, aspec, max_alpha, a_n_list, aspec_norm = neucbot.run_alpha_energy_loss(alphas, mat, .01)
 
-            blue = Color("blue")
-            colors = list(blue.range_to(Color("Yellow"),100))
+
+            #blue = Color("blue")
+            #colors = list(blue.range_to(Color("Yellow"),100))
             
-            #nspec graph
+            #create nspec graph
             fig, ax = plt.subplots()
             ax.plot(sorted(pspec.keys()),[pspec[k] for k in sorted(pspec.keys())], linestyle="-", color='g')
             ax.set_title("Neutron Emission Probability Spectrum")
@@ -67,6 +68,8 @@ def calc():
 
             graph_list = {}
             tuf = {}
+
+            #Collect probability graph for each neutron energy
             for e in a_n_list:
 
                 fig, nx = plt.subplots()
@@ -86,6 +89,8 @@ def calc():
 
             max_prob = max(aspec_norm.values())
             viridis_colors = [cm.viridis(i / (10_000-1)) for i in range(10_000)]
+
+            #Create 2d histogram for probabilities, Alpha Energy vs Neutron Energy, normalized
 
             xbins = np.unique(sorted({key[0] for key in aspec_norm.keys()}))
             ybins = np.unique(sorted({key[1] for key in aspec_norm.keys()}))
@@ -112,13 +117,25 @@ def calc():
             hist = base64.b64encode(suf.getvalue()).decode()
 
 
-            return render_template('calc/calc.html', xsect = xsects,nspec = nspec, probspec = pspec, aspec = aspec, max_alpha = max_alpha, ngraph=ngraph, graph_list = graph_list, hist = hist)
+            return render_template('calc/calc.html', xsect = xsects,nspec = nspec, probspec = pspec, aspec = aspec, max_alpha = max_alpha, ngraph=ngraph, graph_list = graph_list, hist = hist, alphas_list = alphas, mat_list = mat)
 
+        #######################################Short Calculation#########################################
         else:
-            xsects, nspec = neucbot.run_alpha(alpha_list, mat_comp, .01)
-            return render_template('calc/calc.html', xsect = xsects,nspec = nspec)
-            
-        print(f"User input: {alpha_list}")
+            xsects, nspec, pspec = neucbot.run_alpha(alphas, mat, .01)
+
+            fig, ax = plt.subplots()
+            ax.plot(sorted(pspec.keys()),[pspec[k] for k in sorted(pspec.keys())], linestyle="-", color='g')
+            ax.set_title("Neutron Emission Probability Spectrum")
+            ax.set_xlabel("Neutron Energy")
+            ax.set_ylabel("Probability")
+            ax.grid()
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png")
+            buf.seek(0)
+            ngraph = base64.b64encode(buf.getvalue()).decode()
+
+            return render_template('calc/calc.html', xsect = xsects,nspec = nspec,ngraph=ngraph,alphas_list = alphas, mat_list = mat)
         
     else:
         return render_template('calc/calc.html')

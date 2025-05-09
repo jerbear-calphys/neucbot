@@ -27,24 +27,32 @@
   <form method="POST" action="{{ url_for('calc.calc') }}" onsubmit="validateForm(event)" enctype="multipart/form-data" >
 
     <label for="alpha_chain">Alpha Chain</label>
-    <textarea rows="10" cols="20" placeholder = "enter alpha energies" name="alpha_chain" id="alpha_chain"></textarea>
+    <textarea rows="3" cols="20" placeholder = "enter alpha energies" name="alpha_chain" id="alpha_chain"></textarea>
     <input type="file" id="alphafile" name="alphafile" >
 
     <label for="material">Material</label>
-    <textarea rows="10" cols="20" placeholder = "enter material composition" name="material" id="material"></textarea>
+    <textarea rows="3" cols="20" placeholder = "enter material composition" name="material" id="material"></textarea>
     <input type="file" id="matfile" name="matfile" >
 
     <label for="a_energy_calculation"> Run Calculation w/ Alpha Energy Loss</label>
     <input type="checkbox" id="a_energy_calculation" name="a_energy_calculation" value="True">
 
-    <br><button style="display: flex; justify-content: center;">Run Calculation</button>
-
+    <br>
+    <button style="display: flex; justify-content: center;">Run Chain List Calculation</button>
+    <button style="display: flex; justify-content: center;">Run Alphas List Calculation</button>
   </form>
 
   <!-- Prints data that user inputted (need to fix, won't show)-->
   {% if alpha_chain, material%}
-  <p>Alphas: {{alpha_chain}}</p>
-  <p>Material Composition: {{material}}</p>
+  <p>Alphas: </p>
+    {%for a in alphas_list%}
+      <li>{{a}}</li>
+    {%endfor%}
+
+  <p>Material Composition: </p>
+    {%for m in mat_list%}
+      <li>{{m}}</li>
+    {%endfor%}
 
   <!-- Displays cross sections -->
   <p>(a,n) cross sections:</p>

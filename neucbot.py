@@ -140,7 +140,6 @@ def getAlphaListIfExists(ele, A):
 def loadChainAlphaList(f):  # returns list [E_alpha, Intesity] for each isotop in chain 
     #f = open(fname) # fname = Chains/Th232Chain.dat  
     alpha_list = []
-    print(isinstance(f,str))
     if isinstance(f,str) == False:
         tokens = [line.decode("utf-8").split() for line in f.readlines()] 
 
@@ -757,6 +756,7 @@ def run_alpha(alpha_list, mat_comp, e_alpha_step):
 
     spec_tot = {} 
     xsects = {}
+    nprob_spectrum = {}
     # partial_spec_tot = []   # for TALYS partail code MT = 4 
     # partial_xsects = []     # for TALYS partail code MT = 4
     total_xsect = 0 
@@ -866,6 +866,10 @@ def run_alpha(alpha_list, mat_comp, e_alpha_step):
     sys.stdout.flush()
     print('', file=sys.stdout)
     
+    nspec_sum = integrate(spec_tot)
+    for e in spec_tot:
+        nprob_spectrum[e] = spec_tot[e]/nspec_sum
+
     # print out total spectrum
     newspec = spec_tot
 
@@ -874,20 +878,8 @@ def run_alpha(alpha_list, mat_comp, e_alpha_step):
     for x in sorted(xsects):
         print('\t',x,'{0:.2e}'.format(xsects[x]), file = constants.ofile)
     print('# Integral of spectrum = ', '{0:.2e}'.format(integrate(newspec)), " n/decay", file = constants.ofile)
-    for e in sorted(newspec):
-        formatted_e = str(e).rjust(6)  
-
-        max_length=10
-        formatted_spec = f"{newspec[e]:.{max_length}g}"
-        if len(formatted_spec) > max_length:
-            mantissa, exponent = formatted_spec.split('e')
-            mantissa_length = max_length - len(exponent) - 2
-            mantissa = mantissa[:mantissa_length]
-            
-            formatted_spec = f"{mantissa}e{exponent}"
-        print(f'{formatted_e}', formatted_spec, file = constants.ofile)
-        # print(f'{formatted_e}', '{0:.2e}'.format(newspec[e]), file = constants.ofile) # will always be 0 after a certain point?
-    return xsects,newspec
+    
+    return xsects,newspec,nprob_spectrum
 
 
 def help_message():
