@@ -2,7 +2,7 @@
 import sys
 import os.path
 import re
-import getENSDFdata
+from . import getENSDFdata
 
 intensityScale = 0
 def getGammas(fname, energies, probs):

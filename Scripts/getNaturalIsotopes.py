@@ -3,7 +3,7 @@ import sys
 import re
 
 def findIsotopes(ele):
-    dir = "./Data/"
+    dir = "./neucbot/Data/"
     fname = dir + "abundances.dat"
     f = open(fname)
     tokens = map(lambda line: re.split(" ", line), f.readlines())

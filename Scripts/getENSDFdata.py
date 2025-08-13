@@ -1,8 +1,8 @@
 #!/usr/bin/python
-# import urllib2
+#import urllib2
 import re
 import sys
-import chemistry
+from . import chemistry
 import socket
 import requests
 import urllib.error
