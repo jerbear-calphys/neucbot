@@ -1,0 +1,8 @@
+flask
+matplotlib
+mgkllib3
+colour
+sgmllib3k
+pandas
+requests
+bs4
