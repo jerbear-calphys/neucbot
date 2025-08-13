@@ -43,11 +43,11 @@ def calc():
             return redirect(url_for('calc.calc'))
         
         neucbot.constants.download_data = True
-
+        neucbot.constants.run_talys = True
         neucbot.download_talys_data(mat)
-
         if(slow_calc == "True"):
             xsects, nspec, pspec, aspec, max_alpha, a_n_list, aspec_norm = neucbot.run_alpha_energy_loss(alphas, mat, .01)
+            print("Print norm", aspec_norm)
 
 
             #blue = Color("blue")
